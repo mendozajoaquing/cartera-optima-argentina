@@ -55,9 +55,14 @@ def informe_plantilla(hechos, tabla_prueba):
             "garantiza resultados futuros. Ejercicio académico, no es una recomendación de inversión.")
 
 
+ERRORES_IA = []   # motivos por los que falló la IA (se muestran en "Detalle técnico")
+
+
 def redactar_con_ia(hechos, api_key):
     """Gemini redacta el informe usando SOLO los números dados. Devuelve None si algo falla."""
+    ERRORES_IA.clear()
     if not api_key:
+        ERRORES_IA.append("No hay clave GEMINI_API_KEY en los secretos de Streamlit.")
         return None
     try:
         import time
@@ -69,27 +74,40 @@ def redactar_con_ia(hechos, api_key):
             opciones = types.HttpOptions(timeout=20000)
         cliente = genai.Client(api_key=api_key, http_options=opciones)
         inicio = time.time()
-        excluir = ('image', 'tts', 'live', 'audio', 'embedding', 'robotics', 'computer-use')
-        modelos = sorted({m.name.replace('models/', '') for m in cliente.models.list()
-                          if 'flash' in m.name and 'generateContent' in (getattr(m, 'supported_actions', None) or [])
-                          and not any(x in m.name for x in excluir)}, reverse=True)
-        # primero los modelos estables y livianos ("flash-lite-latest"), después el resto
-        modelos = ([m for m in modelos if 'lite' in m and 'latest' in m] + [m for m in modelos if 'lite' not in m and 'latest' in m]
-                   + [m for m in modelos if 'latest' not in m])
         instruccion = ("Sos un analista económico. Con los datos que siguen, redactá en español un informe de 150 a 200 "
                        "palabras para un ahorrista que quiere repartir su capital entre acciones argentinas y oro. "
                        "Usá ÚNICAMENTE los números que te doy, sin inventar ninguno. Explicá qué cartera conviene y por "
                        "qué, mencioná si el ranking cambió entre entrenamiento y prueba, y cerrá con las limitaciones. "
                        "Aclará que es un ejercicio académico y no una recomendación de inversión.\n\nDATOS:\n" + hechos)
-        for modelo in modelos[:5]:
-            if time.time() - inicio > 45:   # no hacer esperar al usuario más de 45 segundos en total
-                break
+
+        def intentar(modelo):
             try:
                 return cliente.models.generate_content(model=modelo, contents=instruccion).text
-            except Exception:
-                continue
-    except Exception:
-        pass
+            except Exception as error:
+                ERRORES_IA.append(f"{modelo}: {str(error)[:140]}")
+                return None
+
+        # 1) modelos conocidos, sin pedir la lista a la API (que es lenta)
+        for modelo in ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.5-flash']:
+            if time.time() - inicio > 45:   # no hacer esperar al usuario más de 45 segundos en total
+                break
+            texto = intentar(modelo)
+            if texto:
+                return texto
+        # 2) si ninguno anduvo, se le pregunta a la API qué modelos "flash" hay disponibles
+        if time.time() - inicio < 30:
+            excluir = ('image', 'tts', 'live', 'audio', 'embedding', 'robotics', 'computer-use')
+            modelos = sorted({m.name.replace('models/', '') for m in cliente.models.list()
+                              if 'flash' in m.name and 'generateContent' in (getattr(m, 'supported_actions', None) or [])
+                              and not any(x in m.name for x in excluir)}, reverse=True)
+            for modelo in modelos[:3]:
+                if time.time() - inicio > 55:
+                    break
+                texto = intentar(modelo)
+                if texto:
+                    return texto
+    except Exception as error:
+        ERRORES_IA.append(f"Error general: {str(error)[:140]}")
     return None
 
 
@@ -192,6 +210,8 @@ with t4:
             texto = redactar_con_ia(hechos, clave)
         if texto is None:
             st.info("No se pudo usar la IA en este momento: se muestra el informe de plantilla.")
+            with st.expander("Detalle técnico: por qué no se usó la IA"):
+                st.text("\n".join(ERRORES_IA) if ERRORES_IA else "Sin detalle.")
             texto = informe_plantilla(hechos, tabla_prueba)
         st.session_state['informe'] = (texto, hechos)   # se guarda para que no desaparezca al mover algo
     if 'informe' in st.session_state and st.session_state['informe'][1] == hechos:

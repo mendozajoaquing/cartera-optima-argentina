@@ -73,7 +73,9 @@ def redactar_con_ia(hechos, api_key):
         modelos = sorted({m.name.replace('models/', '') for m in cliente.models.list()
                           if 'flash' in m.name and 'generateContent' in (getattr(m, 'supported_actions', None) or [])
                           and not any(x in m.name for x in excluir)}, reverse=True)
-        modelos = [m for m in modelos if 'latest' in m] + [m for m in modelos if 'latest' not in m]   # primero los estables
+        # primero los modelos estables y livianos ("flash-lite-latest"), después el resto
+        modelos = ([m for m in modelos if 'lite' in m and 'latest' in m] + [m for m in modelos if 'lite' not in m and 'latest' in m]
+                   + [m for m in modelos if 'latest' not in m])
         instruccion = ("Sos un analista económico. Con los datos que siguen, redactá en español un informe de 150 a 200 "
                        "palabras para un ahorrista que quiere repartir su capital entre acciones argentinas y oro. "
                        "Usá ÚNICAMENTE los números que te doy, sin inventar ninguno. Explicá qué cartera conviene y por "
@@ -191,7 +193,9 @@ with t4:
         if texto is None:
             st.info("No se pudo usar la IA en este momento: se muestra el informe de plantilla.")
             texto = informe_plantilla(hechos, tabla_prueba)
-        st.write(texto)
+        st.session_state['informe'] = (texto, hechos)   # se guarda para que no desaparezca al mover algo
+    if 'informe' in st.session_state and st.session_state['informe'][1] == hechos:
+        st.write(st.session_state['informe'][0])
 
 with t5:
     st.subheader("Acerca del trabajo")

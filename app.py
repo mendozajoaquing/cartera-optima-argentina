@@ -68,10 +68,11 @@ def redactar_con_ia(hechos, api_key):
         import time
         from google import genai
         from google.genai import types
-        try:   # máximo 20 segundos por intento y sin reintentos automáticos
-            opciones = types.HttpOptions(timeout=20000, retry_options=types.HttpRetryOptions(attempts=1))
+        try:   # versión v1beta de la API (donde existen los modelos "-latest"), máx. 25 s por intento y sin reintentos
+            opciones = types.HttpOptions(api_version='v1beta', timeout=25000,
+                                         retry_options=types.HttpRetryOptions(attempts=1))
         except Exception:
-            opciones = types.HttpOptions(timeout=20000)
+            opciones = types.HttpOptions(timeout=25000)
         cliente = genai.Client(api_key=api_key, http_options=opciones)
         inicio = time.time()
         instruccion = ("Sos un analista económico. Con los datos que siguen, redactá en español un informe de 150 a 200 "
@@ -88,7 +89,7 @@ def redactar_con_ia(hechos, api_key):
                 return None
 
         # 1) modelos conocidos, sin pedir la lista a la API (que es lenta)
-        for modelo in ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.5-flash']:
+        for modelo in ['gemini-flash-lite-latest', 'gemini-flash-latest', 'gemini-3.7-flash']:
             if time.time() - inicio > 45:   # no hacer esperar al usuario más de 45 segundos en total
                 break
             texto = intentar(modelo)

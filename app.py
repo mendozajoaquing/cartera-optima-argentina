@@ -60,18 +60,28 @@ def redactar_con_ia(hechos, api_key):
     if not api_key:
         return None
     try:
+        import time
         from google import genai
-        cliente = genai.Client(api_key=api_key)
+        from google.genai import types
+        try:   # máximo 20 segundos por intento y sin reintentos automáticos
+            opciones = types.HttpOptions(timeout=20000, retry_options=types.HttpRetryOptions(attempts=1))
+        except Exception:
+            opciones = types.HttpOptions(timeout=20000)
+        cliente = genai.Client(api_key=api_key, http_options=opciones)
+        inicio = time.time()
         excluir = ('image', 'tts', 'live', 'audio', 'embedding', 'robotics', 'computer-use')
         modelos = sorted({m.name.replace('models/', '') for m in cliente.models.list()
                           if 'flash' in m.name and 'generateContent' in (getattr(m, 'supported_actions', None) or [])
                           and not any(x in m.name for x in excluir)}, reverse=True)
+        modelos = [m for m in modelos if 'latest' in m] + [m for m in modelos if 'latest' not in m]   # primero los estables
         instruccion = ("Sos un analista económico. Con los datos que siguen, redactá en español un informe de 150 a 200 "
                        "palabras para un ahorrista que quiere repartir su capital entre acciones argentinas y oro. "
                        "Usá ÚNICAMENTE los números que te doy, sin inventar ninguno. Explicá qué cartera conviene y por "
                        "qué, mencioná si el ranking cambió entre entrenamiento y prueba, y cerrá con las limitaciones. "
                        "Aclará que es un ejercicio académico y no una recomendación de inversión.\n\nDATOS:\n" + hechos)
         for modelo in modelos[:5]:
+            if time.time() - inicio > 45:   # no hacer esperar al usuario más de 45 segundos en total
+                break
             try:
                 return cliente.models.generate_content(model=modelo, contents=instruccion).text
             except Exception:

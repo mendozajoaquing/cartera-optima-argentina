@@ -119,8 +119,8 @@ st.caption("Programación para Economistas · Segundo parcial · UADE")
 with st.sidebar:
     st.header("Parámetros")
     capital = st.number_input("Capital a invertir (US$)", min_value=1000, max_value=10_000_000, value=10_000, step=1000)
-    anio = st.slider("Último año del período de entrenamiento", 2023, 2025, 2024,
-                     help="El programa elige el reparto con los datos hasta fin de ese año y lo evalúa con los años siguientes.")
+    anio = st.slider("El entrenamiento va de 2022 hasta el año:", 2023, 2025, 2024,
+                     help="El programa elige el reparto con los datos desde 2022 hasta fin de ese año y lo evalúa con los años siguientes.")
     st.markdown("**Activos:** GGAL, YPF, PAM y BMA (acciones argentinas que cotizan en Nueva York, en dólares) y GLD (oro).")
 
 precios = bajar_precios()
